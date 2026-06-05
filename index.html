@@ -416,7 +416,7 @@ td.center { text-align: center; }
     <div class="search-hint">Press <kbd>Enter</kbd> to search</div>
     <div class="status-bar">
       <div class="dot" id="statusDot"></div>
-      <span id="statusText">No data loaded — Admin must upload the JSON data file</span>
+      <span id="statusText">Initializing…</span>
     </div>
   </div>
 
@@ -591,10 +591,22 @@ let pickedFile = null;
 
 // ─── INIT ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  try {
-    const s = sessionStorage.getItem('camp_db');
-    if (s) { DB = JSON.parse(s); refreshChip(); }
-  } catch(_){}
+  // Auto-fetch roster.json from the same GitHub repo
+  setStatus('warn', 'Loading roster data…');
+  fetch('roster.json')
+    .then(r => {
+      if (!r.ok) throw new Error('roster.json not found (HTTP ' + r.status + ')');
+      return r.json();
+    })
+    .then(data => {
+      if (!data.households || !data.headers) throw new Error('Invalid CAMP schema');
+      DB = data;
+      refreshChip();
+    })
+    .catch(err => {
+      console.warn('Auto-fetch failed:', err.message);
+      setStatus('warn', 'Could not auto-load roster — Admin can upload manually');
+    });
 
   document.getElementById('searchInput')
     .addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -711,7 +723,6 @@ function loadFile() {
       const data = JSON.parse(ev.target.result);
       if (!data.households || !data.headers) throw new Error('Invalid CAMP schema');
       DB = data;
-      try { sessionStorage.setItem('camp_db', ev.target.result); } catch(_){}
       refreshChip();
       closeModal('adminModal');
       const hc = Object.keys(DB.households).length;
